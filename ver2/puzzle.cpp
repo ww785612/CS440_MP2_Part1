@@ -35,7 +35,7 @@ void CPuzzle::initialize()
 	loadPuzzle();
 	columnSize = arr[0].size();
 	rowSize = arr.size();
-	unAssignedGrids = new MinHeap(rowSize*columnSize, getHeuristic);
+	unAssignedGrids = new MinHeap(rowSize*columnSize+1, getHeuristic);
 	unAssignedGrids->initialize();
 	vector<GridInfo*> row;
 	GridInfo* newGridInfo = NULL;
@@ -47,15 +47,13 @@ void CPuzzle::initialize()
 			if (arr[rowIdx][columnIdx] == '_')
 			{
 				newGridInfo = new GridInfo(rowIdx, columnIdx, columnSize, colors, false, 'U');
-				// only push non source grids to queue since source grids are not involved in the push/pop process of CSP
-				unAssignedGrids->insert(static_cast<void*>(newGridInfo));
 			}
 			else
 			{
 				newGridInfo = new GridInfo(rowIdx, columnIdx, columnSize, colors, true, arr[rowIdx][columnIdx]);
-				numSourceGrids++;
 			}
 			row.push_back(newGridInfo);
+			unAssignedGrids->insert(static_cast<void*>(newGridInfo));
 			//unAssignedGrids.push(newGridInfo);
 		}
 		puzzle.push_back(row);
@@ -65,10 +63,6 @@ void CPuzzle::initialize()
 
 void CPuzzle::destroy()
 {
-	//unAssignedGrids->printAllValues();
-	unAssignedGrids->destroy();
-	delete unAssignedGrids;
-
 	for (int rowIdx = 0; rowIdx < rowSize; rowIdx++)
 	{
 		for (int columnIdx = 0; columnIdx < columnSize; columnIdx++)
@@ -76,6 +70,8 @@ void CPuzzle::destroy()
 			free(puzzle[rowIdx][columnIdx]);
 		}
 	}
+	unAssignedGrids->destroy();
+	delete unAssignedGrids;
 }
 
 void CPuzzle::assignValue(GridInfo* grid, char val)
@@ -320,8 +316,8 @@ bool CPuzzle::solve()
 	GridInfo* nextGrid = chooseGrid();
 	bool isValid = true;
 
-	//assert(nextGrid != NULL);
-	//assert((pendingGrids.size()+unAssignedGrids.size()) == ((columnSize*rowSize) - numSourceGrids));
+	assert(nextGrid != NULL);
+	//assert((pendingGrids.size()+unAssignedGrids.size())==(columnSize*rowSize));
 
 	if (allAssigned())
 	{
@@ -331,7 +327,7 @@ bool CPuzzle::solve()
 	for (vector<char>::iterator it = colors.begin(); it != colors.end(); it++)
 	{
 		assignValue(nextGrid, *it);
-		//printResult();
+		printResult();
 		isValid = puzzleViolationCheck();
 		if (!isValid)
 		{
@@ -359,7 +355,7 @@ int main()
 
 	CPuzzle* testPuzzle = new CPuzzle("C:/Users/Zi/Documents/Visual Studio 2015/Projects/CS440_MP2_part1/CS440_MP2_part1/puzzle.txt");
 	testPuzzle->initialize();
-	testPuzzle->test();
+	//testPuzzle->test();
 	testPuzzle->solve();
 	testPuzzle->printResult();
 	testPuzzle->destroy();
