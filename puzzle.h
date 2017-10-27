@@ -3,6 +3,7 @@
 #include<queue>
 #include<iostream>
 #include <fstream>
+#include <assert.h>
 
 
 using namespace std;
@@ -12,8 +13,8 @@ struct coord
 	int column;
 	int row;
 	Coord(int inRow, int inColumn) :
-		column(inColumn),
-		row(inRow)
+	column(inColumn),
+	row(inRow)
 	{}
 	void operator=(const Coord& inCoord)
 	{
@@ -31,6 +32,30 @@ struct coord
 		{
 			return false;
 		}
+	}
+
+	Coord left()
+	{
+		Coord temp(this->row, (this->column - 1));
+		return temp;
+	}
+
+	Coord right()
+	{
+		Coord temp(this->row, (this->column + 1));
+		return temp;
+	}
+
+	Coord up()
+	{
+		Coord temp((this->row - 1), this->column);
+		return temp;
+	}
+
+	Coord down()
+	{
+		Coord temp((this->row + 1), this->column);
+		return temp;
 	}
 };
 
@@ -81,5 +106,11 @@ public:
 	}
 	void initialize();
 	void destroy();
+	bool allAssigned(){return (pendingGrids.size() == (rowSize*columnSize));}
+	void assignValue(Coord coordinate, char val);
+	GridInfo* choosGrid();
+	void undoAssign(GridInfo* grid);
+	bool puzzleViolationCheck();
+	bool gridViolationCheck(Coord position);
 	void test();
 };
