@@ -129,25 +129,10 @@ bool CPuzzle::puzzleViolationCheck()
 	return checkResult;
 }
 
-bool CPuzzle::gridViolationCheck(Coord position)
+vector<GridInfo*> CPuzzle::getAdjGrids(Coord position)
 {
-	//	 1
-	//	 ^
-	//0<   >2
-	//	 v
-	//	 3
-	// x->column
-	// y->row
-	GridInfo* currentGrid = puzzle[position.row][position.column];
 	vector<GridInfo*> adjacentGrids;
-	int numMatch = 0;
-	int numOpenGrid = 0;
-	
-	// unassigned grid cannot be invalid
-	if (currentGrid->color == 'U')
-	{
-		return true;
-	}
+
 	Coord coordinate = position.left();
 	if ((coordinate.column >= 0) && (coordinate.column < columnSize) &&
 		(coordinate.row >= 0) && (coordinate.row < rowSize))
@@ -175,6 +160,30 @@ bool CPuzzle::gridViolationCheck(Coord position)
 	{
 		adjacentGrids.push_back(puzzle[coordinate.row][coordinate.column]);
 	}
+	return adjacentGrids;
+}
+
+bool CPuzzle::gridViolationCheck(Coord position)
+{
+	//	 1
+	//	 ^
+	//0<   >2
+	//	 v
+	//	 3
+	// x->column
+	// y->row
+	GridInfo* currentGrid = puzzle[position.row][position.column];
+	vector<GridInfo*> adjacentGrids;
+	int numMatch = 0;
+	int numOpenGrid = 0;
+	
+	// unassigned grid cannot be invalid
+	if (currentGrid->color == 'U')
+	{
+		return true;
+	}
+
+	adjacentGrids = getAdjGrids(position);
 
 	for (vector<GridInfo*>::iterator it = adjacentGrids.begin(); it != adjacentGrids.end(); it++)
 	{
@@ -333,9 +342,16 @@ bool CPuzzle::solve()
 		assignValue(nextGrid, *it);
 		//printResult();
 		isValid = puzzleViolationCheck();
+
+		if (isValid)
+		{
+			isValid = forwardChecking(nextGrid->coord);
+		}
+
 		if (!isValid)
 		{
 			undoAssign(nextGrid);
+			restorAdjGridLegalVal(nextGrid->coord);
 			continue;
 		}
 		else
@@ -348,20 +364,107 @@ bool CPuzzle::solve()
 			else
 			{
 				undoAssign(nextGrid);
+				restorAdjGridLegalVal(nextGrid->coord);
 			}
 		}
 	}
 	return false;
 }
 
+void CPuzzle::discardLegalVal(GridInfo* myGrid, int discardGridID, char val)
+{
+	//remove value from legalValue
+	vector<char>::iterator it = find(myGrid->legalVal.begin(), myGrid->legalVal.end(), val);
+	// == myVector.end() means the element was not found
+	if (it != myGrid->legalVal.end())
+	{
+		myGrid->legalVal.erase(it);
+	}
+	//save removed value to discarded value
+	if (myGrid->discardedValue.count(discardGridID) == 0)
+	{
+		vector<char> newVector = {val};
+		myGrid->discardedValue.insert(pair<int, vector<char>>(discardGridID, newVector));
+	}
+	else
+	{
+		myGrid->discardedValue[discardGridID].push_back(val);
+	}
+}
+
+bool CPuzzle::forwardChecking(Coord responsibleGrid)
+{	
+	GridInfo* pGrid = NULL;
+	bool isValid = true;
+	vector<char> legalValCopy;	// a copy of legalVector to iterate through. Because original vector will be shrinked during the iteration
+	vector<GridInfo*> adjGrids = getAdjGrids(responsibleGrid);
+	for (vector<GridInfo*>::iterator ppGrid = adjGrids.begin(); ppGrid != adjGrids.end(); ppGrid++)
+	{
+		pGrid = *ppGrid;
+		if(pGrid->color == 'U')
+		{
+			//for debugging====================================
+			//if (pGrid->legalVal.size() < 5)
+			//{
+			//	int y = 1;
+			//}
+			//=================================================
+			legalValCopy = pGrid->legalVal;
+			for(auto &val:legalValCopy)
+			{
+				pGrid->color = val;
+				isValid = puzzleViolationCheck();
+				pGrid->color = 'U';
+				if (!isValid)
+				{
+					discardLegalVal(pGrid, puzzle[responsibleGrid.row][responsibleGrid.column]->gridId, val);
+				}
+			}
+			if (pGrid->legalVal.empty())
+			{
+				restorAdjGridLegalVal(responsibleGrid);
+				return false;
+			}
+
+		}
+	}
+	return true;
+}
+
+void CPuzzle::restorAdjGridLegalVal(Coord responsibleCoord)
+{
+	vector<GridInfo*> adjGrids = getAdjGrids(responsibleCoord);
+	for (auto &pGrid : adjGrids)
+	{
+		if (pGrid->color == 'U')
+		{
+			restoreGridLegalVal(pGrid, puzzle[responsibleCoord.row][responsibleCoord.column]->gridId);
+		}
+	}
+}
+
+void CPuzzle::restoreGridLegalVal(GridInfo* thisGrid, int responsibleGridID)
+{
+	//GridInfo* pGrid = puzzle[currentCoord.row][currentCoord.column];
+	for (auto &value : thisGrid->discardedValue[responsibleGridID])
+	{
+		thisGrid->legalVal.push_back(value);
+	}
+	thisGrid->discardedValue.erase(responsibleGridID);
+}
+
 int main()
 {
-
+	bool canSolve = true;
 	CPuzzle* testPuzzle = new CPuzzle("C:/Users/Zi/Documents/Visual Studio 2015/Projects/CS440_MP2_part1/CS440_MP2_part1/puzzle.txt");
 	testPuzzle->initialize();
-	testPuzzle->test();
-	testPuzzle->solve();
+	//testPuzzle->test();
+	canSolve = testPuzzle->solve();
 	testPuzzle->printResult();
+	if (!canSolve)
+	{
+		printf("cannot solve problem\n");
+	}
 	testPuzzle->destroy();
 	return 0;
 }
