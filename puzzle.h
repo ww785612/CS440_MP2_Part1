@@ -6,7 +6,7 @@
 #include <assert.h>
 #include <Windows.h>
 #include <map>
-#include "MinHeap.h"
+#include <ctime>
 
 
 using namespace std;
@@ -71,7 +71,7 @@ struct gridInfo
 	Coord coord;
 	bool isSource;
 	int gridId;
-	int heuristic;
+	int heuristic;	// heuristic = number of legal values
 	char color;		//'U' is means unassigned
 	vector<char> legalVal;
 	map<int, vector<char>>  discardedValue;
@@ -82,10 +82,18 @@ struct gridInfo
 		coord.column = column;
 		isSource = inIsSource;
 		gridId = columnSize*row + column;
-		heuristic = gridId;
 		color = inColor;
-		legalVal = colors;
+		if (!isSource)
+		{
+			legalVal = colors;
+		}
+		else
+		{
+			legalVal.push_back(inColor);
+		}
+		heuristic = legalVal.size();
 	}
+	GridInfo(){}
 };
 
 struct gridInfoLess
@@ -104,19 +112,23 @@ class CPuzzle
 	vector<char> colors;		// all values that appear in the problem
 	int rowSize;
 	int columnSize;
+	vector<pair<GridInfo*, GridInfo*>> arcToCheck;	//only key is used in the map for lookup, vlaue is not used.
 private:
 	vector<GridInfo*> pendingGrids;		// the assigned grids. Use vector to function as stack
 	//vector<GridInfo*> sourceGrid;		// Source grids are kept in a seperate queue. Not to be touched in the pop/push process of CSP
 	// priority_queue<GridInfo*, vector<GridInfo*>, gridInfoLess> unAssignedGrids; // grids awaiting color assignment
-	MinHeap* unAssignedGrids;
+	vector<GridInfo*> unAssignedGrids;		//Heuristic is the number of legal value left
 	int numSourceGrids;
-
+public:
+	unsigned int numAssignment;
+	void printUnAssignedGridHeu();
 	void loadPuzzle();
 public:
 	CPuzzle(const char* inFilePath)
 	{
 		filePath = inFilePath;
 		numSourceGrids = 0;
+		numAssignment = 0;
 	}
 	static int getHeuristic(void* inGrid) { return static_cast<GridInfo*>(inGrid)->heuristic; }
 	void initialize();
@@ -135,5 +147,11 @@ public:
 	void restoreGridLegalVal(GridInfo* thisGrid, int responsibleGridID);
 	vector<GridInfo*> getAdjGrids(Coord coordinate);
 
+	//for Arc Consistency
+	void changedGridArcGen(Coord coordinate); //push arc of adjacent grids to me
+	void gridArcGen(Coord coordinate);		  //push arc of me to adjacent grids
+	void puzzleArcGen();
+	void puzzleArcCheck();
+	bool gridArcCheck(pair<GridInfo*, GridInfo*> arcPair);
 	void test();
 };

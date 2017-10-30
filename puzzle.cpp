@@ -35,8 +35,8 @@ void CPuzzle::initialize()
 	loadPuzzle();
 	columnSize = arr[0].size();
 	rowSize = arr.size();
-	unAssignedGrids = new MinHeap(rowSize*columnSize, getHeuristic);
-	unAssignedGrids->initialize();
+	//unAssignedGrids = new MinHeap(rowSize*columnSize, getHeuristic);
+	//unAssignedGrids->initialize();
 	vector<GridInfo*> row;
 	GridInfo* newGridInfo = NULL;
 
@@ -48,7 +48,7 @@ void CPuzzle::initialize()
 			{
 				newGridInfo = new GridInfo(rowIdx, columnIdx, columnSize, colors, false, 'U');
 				// only push non source grids to queue since source grids are not involved in the push/pop process of CSP
-				unAssignedGrids->insert(static_cast<void*>(newGridInfo));
+				unAssignedGrids.push_back(newGridInfo);
 			}
 			else
 			{
@@ -66,8 +66,8 @@ void CPuzzle::initialize()
 void CPuzzle::destroy()
 {
 	//unAssignedGrids->printAllValues();
-	unAssignedGrids->destroy();
-	delete unAssignedGrids;
+	//unAssignedGrids->destroy();
+	//delete unAssignedGrids;
 
 	for (int rowIdx = 0; rowIdx < rowSize; rowIdx++)
 	{
@@ -80,18 +80,47 @@ void CPuzzle::destroy()
 
 void CPuzzle::assignValue(GridInfo* grid, char val)
 {
+	vector<GridInfo*>::iterator it = find(unAssignedGrids.begin(),unAssignedGrids.end(),grid);
+	numAssignment++;
 	grid->color = val;
+	if (it != unAssignedGrids.end())
+	{
+		unAssignedGrids.erase(it);
+	}
 	pendingGrids.push_back(grid);
-	unAssignedGrids->extractMin();
+	//unAssignedGrids->extractMin();
 	//unAssignedGrids.pop();
 }
 
 GridInfo* CPuzzle::chooseGrid()
 {
-	//unAssignedGrids->printAllValues();
-	GridInfo* nextCoordToAssign = static_cast<GridInfo*>(unAssignedGrids->returnMin());
+	GridInfo* minHeuristicGrid = NULL;
+
+	// printUnAssignedGridHeu();
+
+	if (!unAssignedGrids.empty())
+	{
+		minHeuristicGrid = unAssignedGrids[0];
+		
+		for (auto &pGrid : unAssignedGrids)
+		{
+			if (pGrid->heuristic < minHeuristicGrid->heuristic)
+			{
+				minHeuristicGrid = pGrid;
+			}
+		}
+	}
 	//GridInfo* nextCoordToAssign = unAssignedGrids.top();
-	return nextCoordToAssign;
+	return minHeuristicGrid;
+}
+
+void CPuzzle::printUnAssignedGridHeu()
+{
+	for (auto &pGrid : unAssignedGrids)
+	{
+		printf("%d ", pGrid->heuristic);
+	}
+	printf("\n");
 }
 
 void CPuzzle::undoAssign(GridInfo* grid)
@@ -100,7 +129,7 @@ void CPuzzle::undoAssign(GridInfo* grid)
 	//assert(gridToUndo->gridId == grid->gridId);
 	pendingGrids.pop_back();
 	gridToUndo->color = 'U';
-	unAssignedGrids->insert(static_cast<void*>(gridToUndo));
+	unAssignedGrids.push_back(gridToUndo);
 	//unAssignedGrids.push(gridToUndo);
 }
 
@@ -263,14 +292,19 @@ bool CPuzzle::gridViolationCheck(Coord position)
 
 void CPuzzle::test()
 {
-	//for (int rowIdx = 0; rowIdx < rowSize; rowIdx++)
-	//{
-	//	for (int columnIdx = 0; columnIdx < columnSize; columnIdx++)
-	//	{
-	//		printf("%d ", puzzle[rowIdx][columnIdx]->heuristic);
-	//	}
-	//	printf("\n");
-	//}
+	//print all recorded arc relationship
+	for (auto &arcMap : arcToCheck)
+	{
+		printf("%d -> %d \n",arcMap.first->gridId, arcMap.second->gridId);
+	}
+	for (int rowIdx = 0; rowIdx < rowSize; rowIdx++)
+	{
+		for (int columnIdx = 0; columnIdx < columnSize; columnIdx++)
+		{
+			printf("%d ", puzzle[rowIdx][columnIdx]->legalVal.size());
+		}
+		printf("\n");
+	}
 	/*
 	// test min heap
 	GridInfo* temp = static_cast<GridInfo*>(unAssignedGrids->extractMin());
@@ -304,13 +338,38 @@ void CPuzzle::test()
 
 	//Coord grid(3, 4);
 	//printf("%d\n",puzzleViolationCheck());
-		
+	
+	/*GridInfo* cause[8];
+	GridInfo* effected[8];
+	for (int i = 0; i < 8; i++)
+	{
+		cause[i] = new GridInfo;
+		effected[i] = new GridInfo;
+		pair<GridInfo*, GridInfo*> arcPair;
+		arcPair.first = cause[i];
+		arcPair.second = effected[i];
+		arcToCheck[arcPair] = true;
+	}
+	pair<GridInfo*, GridInfo*> arcPair;
+	arcPair.first = cause[7];
+	arcPair.second = effected[7];
+	printf("key cound:%d \n", arcToCheck.count(arcPair));
+	printf("kfirst pair:%u -> %u\n", arcToCheck.begin()->first, arcToCheck.begin()->second);
+	for (int i = 0; i < 8; i++)
+	{
+		delete cause[i];
+		delete effected[i];
+	}*/
+
+	/*puzzleArcGen();
+	printf("%d\n", arcToCheck.size());*/
+	
 
 }
 
 void CPuzzle::printResult()
 {
-	COORD pos = { 0, 0 };
+	COORD pos = { 0, 1 };
 	HANDLE output = GetStdHandle(STD_OUTPUT_HANDLE);
 	SetConsoleCursorPosition(output, pos);
 
@@ -320,8 +379,9 @@ void CPuzzle::printResult()
 		{
 			printf("%c ", puzzle[rowIdx][columnIdx]->color);
 		}
-		printf("\n \n");
+		printf("\n");
 	}
+	printf("\n");
 }
 
 bool CPuzzle::solve()
@@ -337,7 +397,7 @@ bool CPuzzle::solve()
 		return true;
 	}
 
-	for (vector<char>::iterator it = colors.begin(); it != colors.end(); it++)
+	for (vector<char>::iterator it = nextGrid->legalVal.begin(); it != nextGrid->legalVal.end(); it++)
 	{
 		assignValue(nextGrid, *it);
 		//printResult();
@@ -390,6 +450,7 @@ void CPuzzle::discardLegalVal(GridInfo* myGrid, int discardGridID, char val)
 	{
 		myGrid->discardedValue[discardGridID].push_back(val);
 	}
+	myGrid->heuristic = myGrid->legalVal.size();
 }
 
 bool CPuzzle::forwardChecking(Coord responsibleGrid)
@@ -451,20 +512,163 @@ void CPuzzle::restoreGridLegalVal(GridInfo* thisGrid, int responsibleGridID)
 		thisGrid->legalVal.push_back(value);
 	}
 	thisGrid->discardedValue.erase(responsibleGridID);
+	thisGrid->heuristic = thisGrid->legalVal.size();
+}
+
+void CPuzzle::changedGridArcGen(Coord coordinate)
+{
+	GridInfo* pEffectedGrid = puzzle[coordinate.row][coordinate.column];
+	vector<GridInfo*> adjGrids = getAdjGrids(coordinate);
+	for (auto &causingGrid : adjGrids)
+	{
+		if (!causingGrid->isSource)
+		{
+			pair<GridInfo*, GridInfo*> arcPair;
+			arcPair.first = causingGrid;
+			arcPair.second = pEffectedGrid;
+			//if ( find(arcToCheck.begin(), arcToCheck.end(), arcPair)== arcToCheck.end())
+			//{
+				arcToCheck.push_back(arcPair);
+			//}
+		}
+	}
+}
+
+void CPuzzle::gridArcGen(Coord coordinate)
+{
+	GridInfo* causeGrid = puzzle[coordinate.row][coordinate.column];
+	vector<GridInfo*> adjGrids = getAdjGrids(coordinate);
+	for (auto &pEffectedGrid : adjGrids)
+	{
+		//if (!pEffectedGrid->isSource)
+		//{
+			pair<GridInfo*, GridInfo*> arcPair;
+			arcPair.first = causeGrid;
+			arcPair.second = pEffectedGrid;
+			//if (find(arcToCheck.begin(), arcToCheck.end(), arcPair) == arcToCheck.end())
+			//{
+				arcToCheck.push_back(arcPair);
+			//}
+		//}
+	}
+}
+
+void CPuzzle::puzzleArcGen()
+{
+	for (int rowIdx = 0; rowIdx < rowSize; rowIdx++)
+	{
+		for (int columnIdx = 0; columnIdx < columnSize; columnIdx++)
+		{
+			if (!puzzle[rowIdx][columnIdx]->isSource)
+			{
+				gridArcGen(puzzle[rowIdx][columnIdx]->coord);
+			}
+		}
+	}
+}
+
+//eliminate bad legal value of all grids in puzzle
+void CPuzzle::puzzleArcCheck()
+{
+	bool isModified = false; //is legalVal of causing grid modified?
+	pair<GridInfo*, GridInfo*> arcPair;
+	puzzleArcGen();
+	while (!arcToCheck.empty())
+	{
+		//arcPair.first is the causing grid, arcPair.second is the effected grid
+		arcPair = arcToCheck.front();
+		arcToCheck.erase(arcToCheck.begin());
+		//for debugging==================
+		if (puzzle[0][0]->color == 'U')
+		{
+			int o = 1;
+		}
+		//===============================
+		// check consistancy of arc pair, and remove legalVal of causing grid if their is arc violation
+		isModified = gridArcCheck(arcPair);
+		if (isModified)
+		{
+			// causing grid has change in legal value, add arc of other grid to the causing grid
+			changedGridArcGen(arcPair.first->coord);
+		}
+	}
+}
+
+// check consistancy of arc pair, and remove legalVal of causing grid if their is arc violation
+bool CPuzzle::gridArcCheck(pair<GridInfo*, GridInfo*> arcPair)
+{
+	bool isModified = false;
+	bool isValid = false;
+	GridInfo* causingGrid = arcPair.first;
+	GridInfo* effectedGrid = arcPair.second;
+	vector<char> causeLegalValCopy = causingGrid->legalVal;
+	vector<char>::iterator itLegalValToDiscard;
+	for (auto &causeVal : causeLegalValCopy)
+	{
+		isValid = false;
+		causingGrid->color = causeVal;
+		for (auto &effVal : effectedGrid->legalVal)
+		{
+			if (!effectedGrid->isSource)
+			{
+				effectedGrid->color = effVal;
+			}
+			isValid = puzzleViolationCheck();
+			if (!effectedGrid->isSource)
+			{
+				effectedGrid->color = 'U';
+			}
+			if (isValid)
+			{
+				break;
+			}
+		}
+		causingGrid->color = 'U';
+		if (!isValid)
+		{
+			itLegalValToDiscard = find(causingGrid->legalVal.begin(), causingGrid->legalVal.end(), causeVal);
+			if (itLegalValToDiscard != causingGrid->legalVal.end())
+			{
+				causingGrid->legalVal.erase(itLegalValToDiscard);
+				causingGrid->heuristic = causingGrid->legalVal.size();
+			}
+
+			if (!isModified)
+			{
+				isModified = true;
+			}
+		}
+	}
+	return isModified;
 }
 
 int main()
 {
-	bool canSolve = true;
-	CPuzzle* testPuzzle = new CPuzzle("C:/Users/Zi/Documents/Visual Studio 2015/Projects/CS440_MP2_part1/CS440_MP2_part1/puzzle.txt");
-	testPuzzle->initialize();
-	//testPuzzle->test();
-	canSolve = testPuzzle->solve();
-	testPuzzle->printResult();
-	if (!canSolve)
-	{
-		printf("cannot solve problem\n");
-	}
-	testPuzzle->destroy();
+	//char* fileNames[3] = { "1212.txt","1214.txt","1414.txt" };
+	//for (int i = 0; i < 3; i++)
+	//{
+		using namespace std;
+		clock_t begin = clock();
+
+		bool canSolve = true;
+		CPuzzle* testPuzzle = new CPuzzle("puzzle.txt");
+		testPuzzle->initialize();
+		testPuzzle->puzzleArcCheck();
+		//testPuzzle->puzzleArcGen();
+		//testPuzzle->test();
+		canSolve = testPuzzle->solve();
+		testPuzzle->printResult();
+		printf("numAssignment:%u \n", testPuzzle->numAssignment);
+		if (!canSolve)
+		{
+			printf("cannot solve problem\n \n");
+		}
+		testPuzzle->destroy();
+
+		clock_t end = clock();
+		double elapsed_secs = double(end - begin) / (CLOCKS_PER_SEC/1000);
+		cout << "time: " << elapsed_secs << endl;
+	//}
+
 	return 0;
 }
